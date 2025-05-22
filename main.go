@@ -420,11 +420,11 @@ func main() {
 		tariBlockCacheList = newCacheList
 	})
 
-	crons.Run()
+	crons.Start()
 
 	r := gin.Default()
 	r.Use(middleware.SetupMilieu(milieu))
-	r.POST("/json-rpc", func(c *gin.Context) {
+	r.POST("/json_rpc", func(c *gin.Context) {
 		// Lets begin, shall we?  Play a game perhaps?
 		// We're handling 2 JSON-RPC calls, we handle get_block_template, and
 		bodyAsByteArray, _ := io.ReadAll(c.Request.Body)
