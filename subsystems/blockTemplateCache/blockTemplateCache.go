@@ -53,7 +53,7 @@ func UpdateBlockTemplateCache(core *milieu.Milieu) {
 	sha3xBTCache.reward = blockTemplateResponse.MinerData.Reward
 	sha3xBTCache.mutex.Unlock()
 
-	blockTemplateResponse, err = nodeGRPC.GetBlockTemplate(&tari_generated.PowAlgo{PowAlgo: tari_generated.PowAlgo_POW_ALGOS_RANDOMX})
+	blockTemplateResponse, err = nodeGRPC.GetBlockTemplate(&tari_generated.PowAlgo{PowAlgo: tari_generated.PowAlgo_POW_ALGOS_RANDOMXT})
 	if err != nil {
 		core.CaptureException(err)
 		return
