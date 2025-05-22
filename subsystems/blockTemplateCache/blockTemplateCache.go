@@ -28,11 +28,19 @@ type blockTemplateCacheStruct struct {
 
 var sha3xBTCache *blockTemplateCacheStruct = nil
 var rxBTCache *blockTemplateCacheStruct = nil
+var running = false
 
 // When a miner requests a block template, we need to update the coinbase txn with their unique hash and the pool hash
 
 // UpdateBlockTemplateCache keeps the main block template system spinning and updating to keep things clean
 func UpdateBlockTemplateCache(core *milieu.Milieu) {
+	if running {
+		return
+	}
+	running = true
+	defer func() {
+		running = false
+	}()
 	if poolID == nil {
 		buf := make([]byte, 8)
 		binary.LittleEndian.PutUint64(buf, rand.Uint64())
