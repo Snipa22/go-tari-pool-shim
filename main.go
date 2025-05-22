@@ -73,6 +73,7 @@ type getLastBlockHeaderResultWrapper struct {
 	Jsonrpc string                   `json:"jsonrpc"`
 	Result  getLastBlockHeaderResult `json:"result"`
 }
+
 type BlockHeader struct {
 	BlockSize                 int    `json:"block_size"`
 	BlockWeight               int    `json:"block_weight"`
@@ -327,8 +328,8 @@ func handleGetBlockTemplate(c *gin.Context, bodyAsByteArray []byte) {
 	returnStruct.Result.NextSeedHash = fmt.Sprintf("%x", tariJsonRPCBt)
 	returnStruct.Result.PrevHash = fmt.Sprintf("%x", tariTipBlock.MergeMiningHash)
 	returnStruct.Result.ReservedOffset = 47
-	returnStruct.Result.SeedHash = fmt.Sprintf("%x", tariJsonRPCBt)
-	returnStruct.Result.SeedHeight = 2
+	returnStruct.Result.SeedHash = fmt.Sprintf("%x", tariTipBlock.VmKey)
+	returnStruct.Result.SeedHeight = int(tariTipBlock.Block.Header.Height)
 	returnStruct.Result.Status = "OK"
 	returnStruct.Result.Untrusted = false
 	returnStruct.Result.WideDifficulty = fmt.Sprintf("0x%x", tariTipBlock.MinerData.TargetDifficulty)
