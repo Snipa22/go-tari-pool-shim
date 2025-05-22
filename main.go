@@ -92,7 +92,7 @@ type BlockHeader struct {
 	NumTxes                   int    `json:"num_txes"`
 	OrphanStatus              bool   `json:"orphan_status"`
 	PowHash                   string `json:"pow_hash"`
-	PrevHash                  string `json:"previous_hash"`
+	PrevHash                  string `json:"prev_hash"`
 	Reward                    int64  `json:"reward"`
 	Timestamp                 int    `json:"timestamp"`
 	WideCumulativeDifficulty  string `json:"wide_cumulative_difficulty"`
