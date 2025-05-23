@@ -43,6 +43,12 @@ var tariBlockCacheLock sync.RWMutex
 var tariPoolPayoutAddress = "1215dapiKwqGxk9TAjELMf9gnH6iKM5B9gLbMBvtDSVATRtnBsKDN8bfxGECaPC1wwA8AwRLnq1Ycg28Qx71uW8pABi"
 var poolMinerID []byte
 
+type rpcResultError struct {
+	Jsonrpc string `json:"jsonrpc"`
+	ID      string `json:"id"`
+	Error   string `json:"error"`
+}
+
 type getBlockTemplateStruct struct {
 	Jsonrpc string `json:"jsonrpc"`
 	ID      string `json:"id"`
@@ -242,7 +248,11 @@ func handleSubmitBlock(c *gin.Context, bodyAsByteArray []byte) {
 	rawTariBt, err := hex.DecodeString(submitBlock.Params[0])
 	if err != nil {
 		milieu.CaptureException(err)
-		c.Status(400)
+		c.JSON(400, rpcResultError{
+			Jsonrpc: "2.0",
+			ID:      "-1",
+			Error:   err.Error(),
+		})
 		return
 	}
 	mmHash := rawTariBt[3:35]
@@ -254,14 +264,21 @@ func handleSubmitBlock(c *gin.Context, bodyAsByteArray []byte) {
 		blockData.Header.Nonce = uint64(binary.LittleEndian.Uint32(rawTariBt[43:47]))
 		if blockResp, err := nodeGRPC.SubmitBlock(blockData); err != nil {
 			milieu.CaptureException(err)
-			c.Status(400)
+			c.JSON(400, rpcResultError{
+				Jsonrpc: "2.0",
+				ID:      "-1",
+				Error:   err.Error(),
+			})
 			return
 		} else {
 			c.JSON(200, gin.H{"result": fmt.Sprintf("%v", blockResp.BlockHash)})
 		}
 	} else {
-		milieu.Info("Merge mining tag not found in cache.")
-		c.Status(400)
+		c.JSON(400, rpcResultError{
+			Jsonrpc: "2.0",
+			ID:      "-1",
+			Error:   "Merge mining tag not found in cache.",
+		})
 		return
 	}
 
