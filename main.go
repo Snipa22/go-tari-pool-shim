@@ -348,7 +348,7 @@ func handleGetBlockTemplate(c *gin.Context, bodyAsByteArray []byte) {
 	returnStruct.Result.ReservedOffset = 47
 	returnStruct.Result.SeedHash = fmt.Sprintf("%x", tariTipBlock.VmKey)
 	returnStruct.Result.SeedHeight = int(tariTipBlock.Block.Header.Height)
-	returnStruct.Result.Status = "OK"
+	returnStruct.Result.Status = fmt.Sprintf("%x", tariTipBlock.BlockHash)
 	returnStruct.Result.Untrusted = false
 	returnStruct.Result.WideDifficulty = fmt.Sprintf("0x%x", tariTipBlock.MinerData.TargetDifficulty)
 	returnStruct.ID = getBlockTemplate.ID
