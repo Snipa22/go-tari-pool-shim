@@ -272,7 +272,7 @@ func handleSubmitBlock(c *gin.Context, bodyAsByteArray []byte) {
 			})
 			return
 		} else {
-			c.JSON(200, gin.H{"result": fmt.Sprintf("%v", blockResp.BlockHash)})
+			c.JSON(200, gin.H{"result": fmt.Sprintf("%x", blockResp.BlockHash)})
 		}
 	} else {
 		c.JSON(400, rpcResultError{
