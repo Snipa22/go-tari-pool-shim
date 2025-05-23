@@ -37,8 +37,8 @@ import (
 */
 
 var tariTipBlock *tari_generated.GetNewBlockResult
-var tariBlockCache = map[string]*tari_generated.GetNewBlockResult{}
-var tariBlockCacheList []string
+var tariBlockCache = make(map[string]*tari_generated.GetNewBlockResult)
+var tariBlockCacheList = make([]string, 0)
 var tariBlockCacheLock sync.RWMutex
 var tariPoolPayoutAddress = "1215dapiKwqGxk9TAjELMf9gnH6iKM5B9gLbMBvtDSVATRtnBsKDN8bfxGECaPC1wwA8AwRLnq1Ycg28Qx71uW8pABi"
 var poolMinerID []byte
