@@ -451,7 +451,7 @@ func main() {
 			handleSubmitBlock(c, bodyAsByteArray)
 		} else if strings.Contains(jsonBody, "getblocktemplate") {
 			handleGetBlockTemplate(c, bodyAsByteArray)
-		} else if strings.Contains(jsonBody, "getlastblockheaderbyhash") {
+		} else if strings.Contains(jsonBody, "getblockheaderbyhash") {
 			handleGetBlockHeaderByHash(c, bodyAsByteArray)
 		} else if strings.Contains(jsonBody, "getlastblockheader") {
 			handleGetLastBlockHeader(c)
