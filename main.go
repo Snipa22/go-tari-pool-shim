@@ -261,7 +261,7 @@ func handleSubmitBlock(c *gin.Context, bodyAsByteArray []byte) {
 	defer tariBlockCacheLock.RUnlock()
 	if v, ok := tariBlockCache[fmt.Sprintf("%x", mmHash)]; ok {
 		blockData := v.Block
-		blockData.Header.Nonce = uint64(binary.LittleEndian.Uint32(rawTariBt[39:43]))
+		blockData.Header.Nonce = uint64(binary.BigEndian.Uint32(rawTariBt[39:43]))
 		if blockResp, err := nodeGRPC.SubmitBlock(blockData); err != nil {
 			milieu.CaptureException(err)
 			c.JSON(400, rpcResultError{
