@@ -262,7 +262,7 @@ func handleSubmitBlock(c *gin.Context, bodyAsByteArray []byte) {
 	if v, ok := tariBlockCache[fmt.Sprintf("%x", mmHash)]; ok {
 		blockData := v.Block
 		blockData.Header.Nonce = uint64(binary.BigEndian.Uint32(rawTariBt[39:43]))
-		blockData.Header.Pow.PowData = rawTariBt[47:]
+		blockData.Header.Pow.PowData = rawTariBt[44:76]
 		if blockResp, err := nodeGRPC.SubmitBlock(blockData); err != nil {
 			milieu.CaptureException(err)
 			c.JSON(400, rpcResultError{
@@ -308,8 +308,8 @@ func handleGetBlockTemplate(c *gin.Context, bodyAsByteArray []byte) {
 	tariJsonRPCBt = append(tariJsonRPCBt, tariTipBlock.MergeMiningHash...)
 	// 4 null bytes, this is the 4 bytes that normally would be part of timestamp, which is where null at 3 comes from
 	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00}...)
-	// 8 null bytes, this is the nonce space
-	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
+	// 4 null bytes, this is the nonce space, then 0x02, a magic byte
+	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x02}...)
 	// 32 null bytes, this is the PoWData slab, which we'll expose as reserve_offset
 	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
 	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
