@@ -121,15 +121,44 @@ func GetBlockRandomX(minerID []byte, poolAddress string) (*tari_generated.GetNew
 		blockValue += v.Fee
 	}
 
-	// Generate the coinbase transaction
+	// Generate the coinbase transactions
 	coinbaseData := make([]*tari_generated.NewBlockCoinbase, 0)
-	coinbaseData = append(coinbaseData, &tari_generated.NewBlockCoinbase{
-		Address:            poolAddress,
-		Value:              blockValue,
-		StealthPayment:     false,
-		RevealedValueProof: true,
-		CoinbaseExtra:      coinbaseExtra,
-	})
+	i := 0
+	perCoinbase := blockValue / 100
+	for {
+		if blockValue < perCoinbase {
+			break
+		}
+		binary.LittleEndian.PutUint64(buf, rand.Uint64())
+		for i, v := range buf {
+			coinbaseExtra[i+28] = v
+		}
+		coinbaseData = append(coinbaseData, &tari_generated.NewBlockCoinbase{
+			Address:            poolAddress,
+			Value:              perCoinbase,
+			StealthPayment:     false,
+			RevealedValueProof: true,
+			CoinbaseExtra:      coinbaseExtra,
+		})
+		blockValue -= perCoinbase
+		i++
+		if i > 98 {
+			break
+		}
+	}
+	if blockValue > 0 {
+		binary.LittleEndian.PutUint64(buf, rand.Uint64())
+		for i, v := range buf {
+			coinbaseExtra[i+28] = v
+		}
+		coinbaseData = append(coinbaseData, &tari_generated.NewBlockCoinbase{
+			Address:            poolAddress,
+			Value:              blockValue,
+			StealthPayment:     false,
+			RevealedValueProof: true,
+			CoinbaseExtra:      coinbaseExtra,
+		})
+	}
 
 	// Get the block data w/ the coinbases
 	return nodeGRPC.GetBlockWithCoinbases(&tari_generated.GetNewBlockWithCoinbasesRequest{
