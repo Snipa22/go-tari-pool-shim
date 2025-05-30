@@ -124,7 +124,7 @@ func GetBlockRandomX(minerID []byte, poolAddress string) (*tari_generated.GetNew
 	// Generate the coinbase transactions
 	coinbaseData := make([]*tari_generated.NewBlockCoinbase, 0)
 	i := 0
-	perCoinbase := blockValue / 100
+	perCoinbase := blockValue / 10
 	for {
 		if blockValue < perCoinbase {
 			break
@@ -142,7 +142,29 @@ func GetBlockRandomX(minerID []byte, poolAddress string) (*tari_generated.GetNew
 		})
 		blockValue -= perCoinbase
 		i++
-		if i > 98 {
+		if i > 5 {
+			break
+		}
+	}
+	perCoinbase = blockValue / 100
+	for {
+		if blockValue < perCoinbase {
+			break
+		}
+		binary.LittleEndian.PutUint64(buf, rand.Uint64())
+		for i, v := range buf {
+			coinbaseExtra[i+28] = v
+		}
+		coinbaseData = append(coinbaseData, &tari_generated.NewBlockCoinbase{
+			Address:            poolAddress,
+			Value:              perCoinbase,
+			StealthPayment:     false,
+			RevealedValueProof: true,
+			CoinbaseExtra:      coinbaseExtra,
+		})
+		blockValue -= perCoinbase
+		i++
+		if i > 50 {
 			break
 		}
 	}
