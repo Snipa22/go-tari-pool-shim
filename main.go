@@ -42,6 +42,20 @@ var tariBlockCacheList = make([]string, 0)
 var tariBlockCacheLock sync.RWMutex
 var tariPoolPayoutAddress = "1215dapiKwqGxk9TAjELMf9gnH6iKM5B9gLbMBvtDSVATRtnBsKDN8bfxGECaPC1wwA8AwRLnq1Ycg28Qx71uW8pABi"
 var poolMinerID []byte
+var mainGRPCNode string
+var grpcNodeList = []string{
+	"135.181.112.185:18102",
+	"51.91.215.198:18102",
+	"51.210.222.91:18102",
+	"141.94.99.110:18102",
+	"184.164.76.218:18102",
+	"162.218.117.106:18102",
+	"162.218.117.98:18102",
+	"184.164.76.210:18102",
+	"15.235.227.47:18102",
+	"15.235.227.59:18102",
+	"15.235.228.36:18102",
+}
 
 type rpcResultError struct {
 	Jsonrpc string `json:"jsonrpc"`
@@ -243,7 +257,10 @@ func handleSubmitBlock(c *gin.Context, bodyAsByteArray []byte) {
 	milieu := middleware.MustGetMilieu(c)
 	// This is a submit block request
 	submitBlock := submitBlockStruct{}
-	json.Unmarshal(bodyAsByteArray, &submitBlock)
+	err := json.Unmarshal(bodyAsByteArray, &submitBlock)
+	if err != nil {
+		return
+	}
 	// Load the MM hash from the BT, bytes 3:35
 	rawTariBt, err := hex.DecodeString(submitBlock.Params[0])
 	if err != nil {
@@ -273,6 +290,11 @@ func handleSubmitBlock(c *gin.Context, bodyAsByteArray []byte) {
 			return
 		} else {
 			c.JSON(200, gin.H{"result": fmt.Sprintf("%x", blockResp.BlockHash)})
+			for _, grpcNode := range grpcNodeList {
+				nodeGRPC.InitNodeGRPC(grpcNode)
+				_, _ = nodeGRPC.SubmitBlock(blockData)
+			}
+			nodeGRPC.InitNodeGRPC(mainGRPCNode)
 		}
 	} else {
 		c.JSON(400, rpcResultError{
@@ -398,7 +420,7 @@ func main() {
 	poolID := []byte(*poolStringIDPtr)
 	blockTemplateCache.PoolStringID = &poolID
 	tariPoolPayoutAddress = *tariPoolAddress
-
+	mainGRPCNode = *nodeGRPCPtr
 	nodeGRPC.InitNodeGRPC(*nodeGRPCPtr)
 
 	// Initalize the caches
