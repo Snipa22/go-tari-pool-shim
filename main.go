@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -17,6 +18,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/snipa22/go-tari-pool-shim/subsystems/blockTemplateCache"
 	"github.com/snipa22/go-tari-pool-shim/subsystems/tipDataCache"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"log"
 	"strings"
@@ -291,10 +294,15 @@ func handleSubmitBlock(c *gin.Context, bodyAsByteArray []byte) {
 		} else {
 			c.JSON(200, gin.H{"result": fmt.Sprintf("%x", blockResp.BlockHash)})
 			for _, grpcNode := range grpcNodeList {
-				nodeGRPC.InitNodeGRPC(grpcNode)
-				_, _ = nodeGRPC.SubmitBlock(blockData)
+				go func() {
+					var opts []grpc.DialOption
+					opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+					conn, _ := grpc.NewClient(grpcNode, opts...)
+					defer conn.Close()
+					client := tari_generated.NewBaseNodeClient(conn)
+					client.SubmitBlock(context.Background(), blockData)
+				}()
 			}
-			nodeGRPC.InitNodeGRPC(mainGRPCNode)
 		}
 	} else {
 		c.JSON(400, rpcResultError{
