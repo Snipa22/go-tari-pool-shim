@@ -201,20 +201,17 @@ func handleGetBlockHeaderByHash(c *gin.Context, bodyAsByteArray []byte) {
 	}
 	blockHash, err := hex.DecodeString(getBlockHeader.Params.Hash)
 	if err != nil {
-		milieu.CaptureException(err)
 		c.Status(400)
 		return
 	}
 	blockHeader, err := nodeGRPC.GetHeaderByHash(blockHash)
 	if err != nil {
-		milieu.CaptureException(err)
 		milieu.Info(err.Error())
 		c.Status(500)
 		return
 	}
 	netDiff, err := nodeGRPC.GetNetworkDiff(blockHeader.Header.Height)
 	if err != nil {
-		milieu.CaptureException(err)
 		milieu.Info(err.Error())
 		c.Status(500)
 		return
