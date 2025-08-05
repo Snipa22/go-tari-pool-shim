@@ -164,7 +164,7 @@ func GetBlockRandomX(minerID []byte, poolAddress string) (*tari_generated.GetNew
 		})
 		blockValue -= perCoinbase
 		i++
-		if i > 50 {
+		if i > 10 {
 			break
 		}
 	}
