@@ -7,6 +7,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"log"
+	"math/rand"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/Snipa22/core-go-lib/helpers"
 	core "github.com/Snipa22/core-go-lib/milieu"
 	"github.com/Snipa22/core-go-lib/milieu/middleware"
@@ -20,11 +27,6 @@ import (
 	"github.com/snipa22/go-tari-pool-shim/subsystems/tipDataCache"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"io"
-	"log"
-	"strings"
-	"sync"
-	"time"
 )
 
 /*
@@ -46,6 +48,7 @@ var tariBlockCacheLock sync.RWMutex
 var tariPoolPayoutAddress = "1215dapiKwqGxk9TAjELMf9gnH6iKM5B9gLbMBvtDSVATRtnBsKDN8bfxGECaPC1wwA8AwRLnq1Ycg28Qx71uW8pABi"
 var poolMinerID []byte
 var mainGRPCNode string
+var isSoloMode bool
 var grpcNodeList = []string{
 	"135.181.112.185:18102",
 	"51.91.215.198:18102",
@@ -340,7 +343,15 @@ func handleGetBlockTemplate(c *gin.Context, bodyAsByteArray []byte) {
 	// 32 null bytes, this is the PoWData slab, which we'll expose as reserve_offset
 	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
 	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
-	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
+	if isSoloMode {
+		buf := make([]byte, 8)
+		binary.LittleEndian.PutUint64(buf, rand.Uint64())
+		for _, v := range buf {
+			tariJsonRPCBt = append(tariJsonRPCBt, v)
+		}
+	} else {
+		tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
+	}
 	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
 
 	returnStruct := daemon.BlockTemplateResponse{
@@ -417,6 +428,7 @@ func main() {
 
 	// Load config flags
 	debugEnabledPtr := flag.Bool("debug-enabled", false, "Enable Debug Logging")
+	soloEnabledPtr := flag.Bool("solo", false, "Enable solo mode")
 	nodeGRPCPtr := flag.String("base-node-grpc-address", "node-pool.tari.jagtech.io:18102", "Address for the base-node, defaults to Impala's public pool")
 	poolStringIDPtr := flag.String("pool-coinbase-id", "ImpalaDev", "9 character string to identify the pool")
 	tariPoolAddress := flag.String("pool-tari-address", "1215dapiKwqGxk9TAjELMf9gnH6iKM5B9gLbMBvtDSVATRtnBsKDN8bfxGECaPC1wwA8AwRLnq1Ycg28Qx71uW8pABi", "The address of the wallet Tari should be paid into, the shim ignores the data in GBT")
@@ -426,6 +438,7 @@ func main() {
 	blockTemplateCache.PoolStringID = &poolID
 	tariPoolPayoutAddress = *tariPoolAddress
 	mainGRPCNode = *nodeGRPCPtr
+	isSoloMode = *soloEnabledPtr
 	nodeGRPC.InitNodeGRPC(*nodeGRPCPtr)
 
 	// Initalize the caches
