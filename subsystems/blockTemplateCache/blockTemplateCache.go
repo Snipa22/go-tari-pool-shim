@@ -2,11 +2,12 @@ package blockTemplateCache
 
 import (
 	"encoding/binary"
-	"github.com/Snipa22/core-go-lib/milieu"
-	"github.com/Snipa22/go-tari-grpc-lib/v2/nodeGRPC"
-	"github.com/Snipa22/go-tari-grpc-lib/v2/tari_generated"
 	"math/rand"
 	"sync"
+
+	"github.com/Snipa22/core-go-lib/milieu"
+	"github.com/Snipa22/go-tari-grpc-lib/v3/nodeGRPC"
+	"github.com/Snipa22/go-tari-grpc-lib/v3/tari_generated"
 )
 
 // poolID is a random byte string used to ID the pool in the coinbase txn

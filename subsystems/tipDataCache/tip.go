@@ -1,10 +1,11 @@
 package tipDataCache
 
 import (
-	"github.com/Snipa22/core-go-lib/milieu"
-	"github.com/Snipa22/go-tari-grpc-lib/v2/nodeGRPC"
-	"github.com/Snipa22/go-tari-grpc-lib/v2/tari_generated"
 	"sync"
+
+	"github.com/Snipa22/core-go-lib/milieu"
+	"github.com/Snipa22/go-tari-grpc-lib/v3/nodeGRPC"
+	"github.com/Snipa22/go-tari-grpc-lib/v3/tari_generated"
 )
 
 type tipDataStruct struct {

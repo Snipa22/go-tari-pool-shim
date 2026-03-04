@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -17,13 +17,15 @@ import (
 	"github.com/Snipa22/core-go-lib/helpers"
 	core "github.com/Snipa22/core-go-lib/milieu"
 	"github.com/Snipa22/core-go-lib/milieu/middleware"
-	"github.com/Snipa22/go-tari-grpc-lib/v2/nodeGRPC"
-	"github.com/Snipa22/go-tari-grpc-lib/v2/tari_generated"
+	"github.com/Snipa22/go-tari-grpc-lib/v3/nodeGRPC"
+	"github.com/Snipa22/go-tari-grpc-lib/v3/tari_generated"
 	"github.com/Snipa22/go-xmr-lib/daemon"
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
+	"github.com/snipa22/go-tari-pool-shim/poolStratum"
 	"github.com/snipa22/go-tari-pool-shim/subsystems/blockTemplateCache"
+	"github.com/snipa22/go-tari-pool-shim/subsystems/config"
 	"github.com/snipa22/go-tari-pool-shim/subsystems/tipDataCache"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -61,23 +63,6 @@ var grpcNodeList = []string{
 	"15.235.227.47:18102",
 	"15.235.227.59:18102",
 	"15.235.228.36:18102",
-}
-
-type getBlockTemplateXmrigStruct struct {
-	Jsonrpc string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Method  string `json:"method"`
-	Params  struct {
-		WalletAddress string `json:"wallet_address"`
-		ReserveSize   int    `json:"reserve_size"`
-	} `json:"params"`
-}
-
-type submitBlockXmrigStruct struct {
-	Jsonrpc string   `json:"jsonrpc"`
-	ID      int      `json:"id"`
-	Method  string   `json:"method"`
-	Params  []string `json:"params"`
 }
 
 type rpcResultError struct {
@@ -404,142 +389,6 @@ func handleGetBlockTemplate(c *gin.Context, bodyAsByteArray []byte) {
 	c.JSON(200, returnStruct)
 }
 
-// The next two functions use ints for id's rather than strings, making them directly xmrig compatible
-func handleSubmitBlockSolo(c *gin.Context, bodyAsByteArray []byte) {
-	milieu := middleware.MustGetMilieu(c)
-	// This is a submit block request
-	submitBlock := submitBlockXmrigStruct{}
-
-	err := json.Unmarshal(bodyAsByteArray, &submitBlock)
-	if err != nil {
-		return
-	}
-	// Load the MM hash from the BT, bytes 3:35
-	rawTariBt, err := hex.DecodeString(submitBlock.Params[0])
-	if err != nil {
-		milieu.CaptureException(err)
-		c.JSON(400, rpcResultError{
-			Jsonrpc: "2.0",
-			ID:      "-1",
-			Error:   err.Error(),
-		})
-		return
-	}
-	mmHash := rawTariBt[3:35]
-	// Read lock time
-	tariBlockCacheLock.RLock()
-	defer tariBlockCacheLock.RUnlock()
-	if v, ok := tariBlockCache[fmt.Sprintf("%x", mmHash)]; ok {
-		blockData := v.Block
-		blockData.Header.Nonce = uint64(binary.BigEndian.Uint32(rawTariBt[39:43]))
-		blockData.Header.Pow.PowData = rawTariBt[44:76]
-		if blockResp, err := nodeGRPC.SubmitBlock(blockData); err != nil {
-			milieu.CaptureException(err)
-			c.JSON(400, rpcResultError{
-				Jsonrpc: "2.0",
-				ID:      "-1",
-				Error:   err.Error(),
-			})
-			return
-		} else {
-			c.JSON(200, gin.H{"result": fmt.Sprintf("%x", blockResp.BlockHash)})
-			for _, grpcNode := range grpcNodeList {
-				go func() {
-					var opts []grpc.DialOption
-					opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-					conn, _ := grpc.NewClient(grpcNode, opts...)
-					defer conn.Close()
-					client := tari_generated.NewBaseNodeClient(conn)
-					client.SubmitBlock(context.Background(), blockData)
-				}()
-			}
-		}
-	} else {
-		c.JSON(400, rpcResultError{
-			Jsonrpc: "2.0",
-			ID:      "-1",
-			Error:   "Merge mining tag not found in cache.",
-		})
-		return
-	}
-
-}
-
-func handleGetBlockTemplateSolo(c *gin.Context, bodyAsByteArray []byte) {
-	milieu := middleware.MustGetMilieu(c)
-	getBlockTemplate := getBlockTemplateXmrigStruct{}
-	if err := json.Unmarshal(bodyAsByteArray, &getBlockTemplate); err != nil {
-		milieu.CaptureException(err)
-		c.Status(400)
-		return
-	}
-	tariBlockCacheLock.RLock()
-	defer tariBlockCacheLock.RUnlock()
-	// 0 - Major
-	// 1 - Minor
-	// 2 - Null
-	// 3-34 - MM Hash
-	// 35-38 - Null timestamp bytes
-	// 39-42 - Nonce high bytes
-	// 43-46 - Nonce low bytes, where you'll find them.
-	// Major, Minor, Null
-	tariJsonRPCBt := []byte{0x00, 0x00, 0x00}
-	// Tari MM Hash
-	tariJsonRPCBt = append(tariJsonRPCBt, tariTipBlock.MergeMiningHash...)
-	// 4 null bytes, this is the 4 bytes that normally would be part of timestamp, which is where null at 3 comes from
-	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00}...)
-	// 4 null bytes, this is the nonce space, then 0x02, a magic byte
-	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x02}...)
-	// 32 null bytes, this is the PoWData slab, which we'll expose as reserve_offset
-	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
-	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, rand.Uint64())
-	for _, v := range buf {
-		tariJsonRPCBt = append(tariJsonRPCBt, v)
-	}
-	tariJsonRPCBt = append(tariJsonRPCBt, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
-
-	returnStruct := daemon.BlockTemplateResponse{
-		ID:      fmt.Sprintf("%v", getBlockTemplate.ID),
-		Jsonrpc: getBlockTemplate.Jsonrpc,
-		Result: struct {
-			BlockhashingBlob  string `json:"blockhashing_blob"`
-			BlocktemplateBlob string `json:"blocktemplate_blob"`
-			Difficulty        int64  `json:"difficulty"`
-			DifficultyTop64   int    `json:"difficulty_top64"`
-			ExpectedReward    int64  `json:"expected_reward"`
-			Height            int    `json:"height"`
-			NextSeedHash      string `json:"next_seed_hash"`
-			PrevHash          string `json:"prev_hash"`
-			ReservedOffset    int    `json:"reserved_offset"`
-			SeedHash          string `json:"seed_hash"`
-			SeedHeight        int    `json:"seed_height"`
-			Status            string `json:"status"`
-			Untrusted         bool   `json:"untrusted"`
-			WideDifficulty    string `json:"wide_difficulty"`
-		}{},
-	}
-
-	returnStruct.Result.BlockhashingBlob = fmt.Sprintf("%x", []byte{0x00})
-	returnStruct.Result.BlocktemplateBlob = fmt.Sprintf("%x", tariJsonRPCBt)
-	returnStruct.Result.Difficulty = int64(tariTipBlock.MinerData.TargetDifficulty)
-	returnStruct.Result.DifficultyTop64 = 0
-	returnStruct.Result.ExpectedReward = int64(tariTipBlock.MinerData.Reward + tariTipBlock.MinerData.TotalFees)
-	returnStruct.Result.Height = int(tariTipBlock.Block.Header.Height)
-	returnStruct.Result.NextSeedHash = fmt.Sprintf("%x", tariJsonRPCBt)
-	returnStruct.Result.PrevHash = fmt.Sprintf("%x", tariTipBlock.MergeMiningHash)
-	returnStruct.Result.ReservedOffset = 47
-	returnStruct.Result.SeedHash = fmt.Sprintf("%x", tariTipBlock.VmKey)
-	returnStruct.Result.SeedHeight = int(tariTipBlock.Block.Header.Height)
-	returnStruct.Result.Status = fmt.Sprintf("%x", tariTipBlock.BlockHash)
-	returnStruct.Result.Untrusted = false
-	returnStruct.Result.WideDifficulty = fmt.Sprintf("0x%x", tariTipBlock.MinerData.TargetDifficulty)
-	returnStruct.ID = fmt.Sprintf("%v", getBlockTemplate.ID)
-	returnStruct.Jsonrpc = getBlockTemplate.Jsonrpc
-	c.JSON(200, returnStruct)
-}
-
 func updateTariBlockCache(milieu *core.Milieu) {
 	blockTemplateCache.UpdateBlockTemplateCache(milieu)
 	blockData, err := blockTemplateCache.GetBlockRandomX(poolMinerID, tariPoolPayoutAddress)
@@ -578,6 +427,9 @@ func main() {
 	nodeGRPCPtr := flag.String("base-node-grpc-address", "node-pool.tari.jagtech.io:18102", "Address for the base-node, defaults to Impala's public pool")
 	poolStringIDPtr := flag.String("pool-coinbase-id", "ImpalaDev", "9 character string to identify the pool")
 	tariPoolAddress := flag.String("pool-tari-address", "1215dapiKwqGxk9TAjELMf9gnH6iKM5B9gLbMBvtDSVATRtnBsKDN8bfxGECaPC1wwA8AwRLnq1Ycg28Qx71uW8pABi", "The address of the wallet Tari should be paid into, the shim ignores the data in GBT")
+	minDiff := flag.Uint64("min-diff", 100000, "Set the minimum difficulty for the port")
+	maxDiff := flag.Uint64("max-diff", 5000000, "Set the maximum difficulty for the port")
+	startingDiff := flag.Uint64("starting-diff", 100000, "Set the starting difficulty for the port")
 	flag.Parse()
 
 	poolID := []byte(*poolStringIDPtr)
@@ -585,10 +437,15 @@ func main() {
 	tariPoolPayoutAddress = *tariPoolAddress
 	mainGRPCNode = *nodeGRPCPtr
 	isSoloMode = *soloEnabledPtr
+	config.StartingDifficulty = *startingDiff
+	config.MinimumDifficulty = *minDiff
+	config.MaxDifficulty = *maxDiff
 	nodeGRPC.InitNodeGRPC(*nodeGRPCPtr)
+	config.InitShareCount()
 
 	// Initalize the caches
 	tipDataCache.UpdateTipData(milieu)
+	updateTariBlockCache(milieu)
 
 	if *debugEnabledPtr {
 		milieu.SetLogLevel(logrus.DebugLevel)
@@ -596,6 +453,8 @@ func main() {
 
 	// Repeating task setup start
 	crons := cron.New(cron.WithSeconds())
+
+	config.SystemCrons.CronMaster = crons
 
 	// Add tasks to cron
 	_, _ = crons.AddFunc("* * * * * *", func() {
@@ -634,17 +493,9 @@ func main() {
 		bodyAsByteArray, _ := io.ReadAll(c.Request.Body)
 		jsonBody := string(bodyAsByteArray)
 		if strings.Contains(jsonBody, "submitblock") {
-			if isSoloMode {
-				handleSubmitBlockSolo(c, bodyAsByteArray)
-			} else {
-				handleSubmitBlock(c, bodyAsByteArray)
-			}
+			handleSubmitBlock(c, bodyAsByteArray)
 		} else if strings.Contains(jsonBody, "getblocktemplate") {
-			if isSoloMode {
-				handleGetBlockTemplateSolo(c, bodyAsByteArray)
-			} else {
-				handleGetBlockTemplate(c, bodyAsByteArray)
-			}
+			handleGetBlockTemplate(c, bodyAsByteArray)
 		} else if strings.Contains(jsonBody, "getblockheaderbyhash") {
 			handleGetBlockHeaderByHash(c, bodyAsByteArray)
 		} else if strings.Contains(jsonBody, "getlastblockheader") {
@@ -656,9 +507,27 @@ func main() {
 		}
 	})
 
+	go func() {
+		listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v", 2738))
+		fmt.Printf("Listening on port 2738 for stratum connections\n")
+		if err != nil {
+			milieu.CaptureException(err)
+			milieu.Fatal(err.Error())
+		}
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				break
+			}
+			defer conn.Close()
+			go poolStratum.ClientConn(milieu)(conn)
+		}
+	}()
+
 	err = r.Run("127.0.0.1:1330") // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 	if err != nil {
 		milieu.CaptureException(err)
 		log.Fatalf("Unable to initalize gin")
 	}
+
 }
