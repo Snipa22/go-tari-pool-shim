@@ -201,8 +201,6 @@ func (m *minerStruct) Login(jsonData json.RawMessage) {
 		} else {
 			if uint64(val) < config.MinimumDifficulty {
 				m.Difficulty = config.MinimumDifficulty
-			} else if uint64(val) > config.MinimumDifficulty {
-				m.Difficulty = config.MinimumDifficulty
 			} else {
 				m.Difficulty = uint64(val)
 			}
